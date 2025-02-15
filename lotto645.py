@@ -42,7 +42,8 @@ class Lotto645:
         self, 
         auth_ctrl: auth.AuthController, 
         cnt: int, 
-        mode: Lotto645Mode
+        mode: Lotto645Mode,
+        manual_numbers=None
     ) -> dict:
         assert type(auth_ctrl) == auth.AuthController
         assert type(cnt) == int and 1 <= cnt <= 5
@@ -51,15 +52,14 @@ class Lotto645:
         headers = self._generate_req_headers(auth_ctrl)
         requirements = self._getRequirements(headers)
 
-        data = (
-            self._generate_body_for_auto_mode(cnt, requirements)
-            if mode == Lotto645Mode.AUTO
-            else self._generate_body_for_manual(cnt)
-        )
+        if mode == Lotto645Mode.AUTO:
+            data = self._generate_body_for_auto_mode(cnt, requirements)
+        else:
+            data = self._generate_body_for_manual(cnt, manual_numbers)
 
         body = self._try_buying(headers, data)
-
         self._show_result(body)
+
         return body
 
     def _generate_req_headers(self, auth_ctrl: auth.AuthController) -> dict:
@@ -264,3 +264,37 @@ class Lotto645:
         result = body.get("result", {})
         if result.get("resultMsg", "FAILURE").upper() != "SUCCESS":    
             return
+
+    def _generate_body_for_manual(self, cnt: int, manual_numbers: list) -> dict:
+        assert isinstance(cnt, int) and 1 <= cnt <= 5
+        assert isinstance(manual_numbers, list) and len(manual_numbers) == cnt
+
+        SLOTS = ["A", "B", "C", "D", "E"]
+
+        return {
+            "round": self._get_round(),
+            "nBuyAmount": str(1000 * cnt),
+            "param": json.dumps(
+                [
+                    {"genType": "1", "arrGameChoiceNum": numbers, "alpabet": slot}
+                    for slot, numbers in zip(SLOTS[:cnt], manual_numbers)
+                ]
+            ),
+            "gameCnt": cnt
+        }
+
+    def fetch_lotto_statistics(self) -> dict:
+        """로또 당첨 번호 통계를 크롤링"""
+        url = "https://www.dhlottery.co.kr/gameResult.do?method=statByNumber"
+        res = requests.get(url)
+        soup = BS(res.text, "html.parser")
+
+        stats = {}
+        for row in soup.select("table.tbl_data tbody tr"):
+            cols = row.find_all("td")
+            if len(cols) >= 2:
+                number = cols[0].text.strip()
+                frequency = cols[1].text.strip()
+                stats[number] = frequency
+
+        return stats
