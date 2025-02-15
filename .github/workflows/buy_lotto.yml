@@ -25,3 +25,4 @@ jobs:
           COUNT: ${{ secrets.COUNT }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           DISCORD_WEBHOOK_URL:  ${{ secrets.DISCORD_WEBHOOK_URL }}
+          OPEN_API_KEY:  ${{ secrets.OPEN_API_KEY }}
