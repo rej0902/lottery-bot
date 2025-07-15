@@ -69,7 +69,7 @@ def get_manual_numbers_from_gpt():
 [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24], [25, 26, 27, 28, 29, 30]]"""
 
     try:
-        client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+        client = OpenAI(api_key=os.environ.get('OPEN_API_KEY'))
         
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -232,11 +232,11 @@ def buy():
     password = os.environ.get('PASSWORD')
     count = int(os.environ.get('COUNT'))
     slack_webhook_url = os.environ.get('SLACK_WEBHOOK_URL') 
-    openai_api_key = os.environ.get('OPENAI_API_KEY')
+    openai_api_key = os.environ.get('OPEN_API_KEY')
 
     # OpenAI API 키 설정 - 새로운 방식에서는 환경변수로 설정
     if openai_api_key:
-        os.environ['OPENAI_API_KEY'] = openai_api_key
+        os.environ['OPEN_API_KEY'] = openai_api_key
 
     globalAuthCtrl = auth.AuthController()
     globalAuthCtrl.login(username, password)
