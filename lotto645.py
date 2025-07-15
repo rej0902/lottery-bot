@@ -55,7 +55,9 @@ class Lotto645:
         if mode == Lotto645Mode.AUTO:
             data = self._generate_body_for_auto_mode(cnt, requirements)
         else:
-            data = self._generate_body_for_manual(cnt, manual_numbers)
+            if manual_numbers is None:
+                raise ValueError("Manual numbers are required for manual mode")
+            data = self._generate_body_for_manual(cnt, manual_numbers, requirements)
 
         body = self._try_buying(headers, data)
         self._show_result(body)
@@ -93,10 +95,7 @@ class Lotto645:
             "gameCnt": cnt
         }
 
-    def _generate_body_for_manual(self, cnt: int) -> dict:
-        assert type(cnt) == int and 1 <= cnt <= 5
 
-        raise NotImplementedError()
 
     def _getRequirements(self, headers: dict) -> list: 
         org_headers = headers.copy()
@@ -265,7 +264,7 @@ class Lotto645:
         if result.get("resultMsg", "FAILURE").upper() != "SUCCESS":    
             return
 
-    def _generate_body_for_manual(self, cnt: int, manual_numbers: list) -> dict:
+    def _generate_body_for_manual(self, cnt: int, manual_numbers: list, requirements: list) -> dict:
         assert isinstance(cnt, int) and 1 <= cnt <= 5
         assert isinstance(manual_numbers, list) and len(manual_numbers) == cnt
 
@@ -273,6 +272,7 @@ class Lotto645:
 
         return {
             "round": self._get_round(),
+            "direct": requirements[0],
             "nBuyAmount": str(1000 * cnt),
             "param": json.dumps(
                 [
@@ -280,21 +280,94 @@ class Lotto645:
                     for slot, numbers in zip(SLOTS[:cnt], manual_numbers)
                 ]
             ),
+            'ROUND_DRAW_DATE': requirements[1],
+            'WAMT_PAY_TLMT_END_DT': requirements[2],
             "gameCnt": cnt
         }
 
     def fetch_lotto_statistics(self) -> dict:
         """로또 당첨 번호 통계를 크롤링"""
         url = "https://www.dhlottery.co.kr/gameResult.do?method=statByNumber"
-        res = requests.get(url)
-        soup = BS(res.text, "html.parser")
+        try:
+            res = self.http_client.get(url)
+            soup = BS(res.text, "html.parser")
 
-        stats = {}
-        for row in soup.select("table.tbl_data tbody tr"):
-            cols = row.find_all("td")
-            if len(cols) >= 2:
-                number = cols[0].text.strip()
-                frequency = cols[1].text.strip()
-                stats[number] = frequency
+            stats = {}
+            # 번호별 통계 테이블 찾기 (두 번째 테이블)
+            tables = soup.find_all("table")
+            if len(tables) > 1:
+                table = tables[1]  # 두 번째 테이블이 번호별 통계
+                rows = table.find_all("tr")
+                for row in rows[1:]:  # 헤더 제외
+                    cols = row.find_all("td")
+                    if len(cols) >= 3:
+                        number = cols[0].text.strip()
+                        percentage = cols[1].text.strip()
+                        frequency = cols[2].text.strip()
+                        if number.isdigit() and 1 <= int(number) <= 45:
+                            stats[number] = {
+                                "percentage": percentage,
+                                "frequency": int(frequency) if frequency.isdigit() else 0
+                            }
+            
+            return stats
+        except Exception as e:
+            print(f"통계 데이터 가져오기 실패: {e}")
+            return {}
 
-        return stats
+    def fetch_recent_no_show_numbers(self) -> list:
+        """최근 미출현 번호 가져오기"""
+        url = "https://www.dhlottery.co.kr/gameResult.do?method=noViewNumber"
+        try:
+            res = self.http_client.get(url)
+            soup = BS(res.text, "html.parser")
+            
+            no_show_numbers = []
+            # 미출현 번호 테이블 찾기
+            table = soup.find("table")
+            if table:
+                for row in table.find_all("tr")[1:]:  # 헤더 제외
+                    cols = row.find_all("td")
+                    if len(cols) >= 2:
+                        numbers = cols[1].text.strip()
+                        if numbers:
+                            no_show_numbers.extend(numbers.split())
+            
+            return list(set(no_show_numbers))  # 중복 제거
+        except Exception as e:
+            print(f"미출현 번호 가져오기 실패: {e}")
+            return []
+
+    def fetch_recent_winning_numbers(self, count: int = 10) -> list:
+        """최근 당첨 번호 가져오기"""
+        url = "https://www.dhlottery.co.kr/gameResult.do?method=byWin"
+        try:
+            res = self.http_client.get(url)
+            soup = BS(res.text, "html.parser")
+            
+            recent_numbers = []
+            # 최근 당첨 번호 테이블 찾기
+            table = soup.find("table")
+            if table:
+                rows = table.find_all("tr")[1:count+1]  # 헤더 제외하고 count만큼
+                for row in rows:
+                    cols = row.find_all("td")
+                    if len(cols) >= 4:
+                        round_num = cols[0].text.strip()
+                        date = cols[1].text.strip()
+                        numbers = cols[2].text.strip()
+                        bonus = cols[3].text.strip()
+                        
+                        if numbers:
+                            number_list = [int(x.strip()) for x in numbers.split(',') if x.strip().isdigit()]
+                            recent_numbers.append({
+                                "round": round_num,
+                                "date": date,
+                                "numbers": number_list,
+                                "bonus": int(bonus) if bonus.isdigit() else 0
+                            })
+            
+            return recent_numbers
+        except Exception as e:
+            print(f"최근 당첨 번호 가져오기 실패: {e}")
+            return []
