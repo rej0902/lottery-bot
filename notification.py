@@ -5,13 +5,26 @@ class Notification:
     def send_lotto_buying_message(self, body: dict, webhook_url: str) -> None:
         assert type(webhook_url) == str
 
-        result = body.get("result", {})
-        if result.get("resultMsg", "FAILURE").upper() != "SUCCESS":  
+        # 빈 응답 체크
+        if not body:
+            message = "⚠️ 로또 구매 실패: 응답 데이터가 없습니다."
+            self._send_discord_webhook(webhook_url, message)
             return
 
-        lotto_number_str = self.make_lotto_number_message(result["arrGameChoiceNum"])
-        message = f"{result['buyRound']}회 로또 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{lotto_number_str}```"
-        self._send_discord_webhook(webhook_url, message)
+        result = body.get("result", {})
+        result_msg = result.get("resultMsg", "FAILURE")
+        
+        # 구매 성공 시
+        if result_msg.upper() == "SUCCESS":
+            lotto_number_str = self.make_lotto_number_message(result["arrGameChoiceNum"])
+            message = f"✅ {result['buyRound']}회 로또 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{lotto_number_str}```"
+            self._send_discord_webhook(webhook_url, message)
+        else:
+            # 구매 실패 시
+            balance = body.get('balance', '확인불가')
+            error_msg = result.get("resultMsg", "알 수 없는 오류")
+            message = f"❌ 로또 구매 실패\n• 오류: {error_msg}\n• 잔액: {balance}"
+            self._send_discord_webhook(webhook_url, message)
 
     def make_lotto_number_message(self, lotto_number: list) -> str:
         assert type(lotto_number) == list

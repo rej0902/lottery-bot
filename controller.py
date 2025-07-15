@@ -232,11 +232,28 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
 
     if not manual_numbers:
         print("ChatGPT로부터 유효한 로또 번호를 가져오지 못했습니다.")
-        return {}
+        # 에러 응답 반환
+        return {
+            "result": {
+                "resultMsg": "ChatGPT 번호 생성 실패",
+                "buyRound": "알 수 없음"
+            },
+            "balance": "확인불가"
+        }
 
-    response = lotto.buy_lotto645(authCtrl, cnt, lotto645.Lotto645Mode.MANUAL, manual_numbers)
-    response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
-    return response
+    try:
+        response = lotto.buy_lotto645(authCtrl, cnt, lotto645.Lotto645Mode.MANUAL, manual_numbers)
+        response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
+        return response
+    except Exception as e:
+        print(f"로또 구매 중 오류 발생: {e}")
+        return {
+            "result": {
+                "resultMsg": f"로또 구매 오류: {str(e)}",
+                "buyRound": "알 수 없음"
+            },
+            "balance": "확인불가"
+        }
 
 
 def buy_lotto645(authCtrl: auth.AuthController, cnt: int, mode: str):
