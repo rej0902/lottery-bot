@@ -13,17 +13,42 @@ class Notification:
 
         result = body.get("result", {})
         result_msg = result.get("resultMsg", "FAILURE")
+        purchase_method = body.get("purchase_method", "UNKNOWN")
         
         # 구매 성공 시
         if result_msg.upper() == "SUCCESS":
             lotto_number_str = self.make_lotto_number_message(result["arrGameChoiceNum"])
-            message = f"✅ {result['buyRound']}회 로또 구매 완료 :moneybag: 남은잔액 : {body['balance']}\n```{lotto_number_str}```"
+            
+            # 구매 방법에 따른 메시지 구성
+            if purchase_method == "CHATGPT_MANUAL":
+                method_emoji = "🤖"
+                method_text = "ChatGPT 추천 번호로 수동 구매"
+            elif purchase_method == "AUTO_FALLBACK":
+                method_emoji = "🔄"
+                method_text = "ChatGPT 실패 → 자동 번호 구매"
+            elif purchase_method == "AUTO_FALLBACK_AFTER_MANUAL_FAIL":
+                method_emoji = "🔄"
+                method_text = "수동 구매 실패 → 자동 번호 구매"
+            else:
+                method_emoji = "✅"
+                method_text = "로또 구매"
+            
+            message = f"{method_emoji} {result['buyRound']}회 {method_text} 완료 💰 남은잔액: {body['balance']}\n```{lotto_number_str}```"
             self._send_discord_webhook(webhook_url, message)
         else:
             # 구매 실패 시
             balance = body.get('balance', '확인불가')
             error_msg = result.get("resultMsg", "알 수 없는 오류")
-            message = f"❌ 로또 구매 실패\n• 오류: {error_msg}\n• 잔액: {balance}"
+            
+            # 실패 유형에 따른 메시지 구성
+            if "ChatGPT" in error_msg:
+                failure_type = "🤖 ChatGPT 오류"
+            elif "자동 구매" in error_msg:
+                failure_type = "🔄 자동 구매 실패"
+            else:
+                failure_type = "❌ 구매 실패"
+                
+            message = f"{failure_type}\n• 오류: {error_msg}\n• 잔액: {balance}"
             self._send_discord_webhook(webhook_url, message)
 
     def make_lotto_number_message(self, lotto_number: list) -> str:
