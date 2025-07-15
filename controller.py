@@ -14,6 +14,42 @@ import time
 
 def get_manual_numbers_from_gpt():
     """ChatGPT API를 사용하여 로또 번호 추천 받기"""
+    
+    def is_valid_lotto_number(num_str):
+        """유효한 로또 번호인지 엄격하게 검증"""
+        try:
+            # 숫자만 포함하는지 확인
+            if not re.match(r'^\d+$', num_str.strip()):
+                return False
+            num = int(num_str.strip())
+            return 1 <= num <= 45
+        except (ValueError, AttributeError):
+            return False
+    
+    def validate_number_set(nums):
+        """번호 세트가 유효한지 검증"""
+        if not isinstance(nums, list) or len(nums) != 6:
+            return False
+        
+        # 모든 번호가 1-45 범위이고 중복이 없는지 확인
+        if not all(isinstance(num, int) and 1 <= num <= 45 for num in nums):
+            return False
+        
+        # 중복 확인
+        if len(set(nums)) != 6:
+            return False
+            
+        return True
+    
+    def generate_fallback_numbers(count=5):
+        """ChatGPT 실패 시 기본 번호 생성"""
+        import random
+        fallback_numbers = []
+        for _ in range(count):
+            nums = sorted(random.sample(range(1, 46), 6))
+            fallback_numbers.append(nums)
+        return fallback_numbers
+    
     # 로또 통계 데이터 가져오기
     lotto = lotto645.Lotto645()
     stats = lotto.fetch_lotto_statistics()
@@ -65,7 +101,7 @@ def get_manual_numbers_from_gpt():
 5. 연속된 번호 조합과 홀짝 균형을 고려
 6. 각 세트는 1~45 사이의 숫자 6개로 구성되어야 하며, 숫자는 중복되지 않아야 합니다.
 
-다음 형식으로만 답변해주세요:
+중요: 반드시 유효한 1-45 범위의 정수만 사용하세요. 다음 형식으로만 답변해주세요:
 [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12], [13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24], [25, 26, 27, 28, 29, 30]]"""
 
     try:
@@ -74,7 +110,7 @@ def get_manual_numbers_from_gpt():
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a professional lottery number recommendation expert with deep statistical analysis capabilities. Analyze the provided comprehensive statistics and recommend numbers based on statistical probability, patterns, and mathematical models."},
+                {"role": "system", "content": "You are a professional lottery number recommendation expert. You must only respond with valid lottery numbers between 1-45. Do not include any symbols like '*' or invalid characters. Always return exactly 5 sets of 6 numbers each in the specified format."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -90,8 +126,13 @@ def get_manual_numbers_from_gpt():
         if match:
             try:
                 list_str = match.group()
-                numbers = json.loads(list_str)
-                print(f"JSON 형식으로 파싱 성공: {numbers}")
+                parsed_numbers = json.loads(list_str)
+                # 각 세트를 엄격하게 검증
+                for num_set in parsed_numbers:
+                    if validate_number_set(num_set):
+                        numbers.append(num_set)
+                if numbers:
+                    print(f"JSON 형식으로 파싱 성공: {numbers}")
             except json.JSONDecodeError:
                 print("JSON 파싱 실패")
         
@@ -100,58 +141,87 @@ def get_manual_numbers_from_gpt():
             bracket_matches = re.findall(r'\[([^\]]+)\]', generated_text)
             for match in bracket_matches:
                 try:
-                    # 숫자만 추출
-                    nums = [int(x.strip()) for x in match.split(',') if x.strip().isdigit()]
-                    if len(nums) == 6 and all(1 <= num <= 45 for num in nums):
-                        numbers.append(nums)
-                except ValueError:
+                    # 콤마로 분리된 요소들 검증
+                    elements = match.split(',')
+                    if len(elements) == 6:
+                        # 각 요소가 유효한 숫자인지 엄격하게 검증
+                        valid_nums = []
+                        for elem in elements:
+                            elem = elem.strip()
+                            if is_valid_lotto_number(elem):
+                                valid_nums.append(int(elem))
+                        
+                        if len(valid_nums) == 6 and validate_number_set(valid_nums):
+                            numbers.append(valid_nums)
+                except (ValueError, AttributeError):
                     continue
         
         # 3. 일반 텍스트에서 번호 추출 (1. [7, 13, 25, 28, 32, 42] 형식)
         if not numbers:
             lines = generated_text.split('\n')
             for line in lines:
-                # 숫자와 콤마, 대괄호만 포함된 라인 찾기
                 if '[' in line and ']' in line:
                     try:
-                        # 대괄호 안의 내용 추출
                         bracket_content = re.search(r'\[([^\]]+)\]', line)
                         if bracket_content:
                             content = bracket_content.group(1)
-                            nums = [int(x.strip()) for x in content.split(',') if x.strip().isdigit()]
-                            if len(nums) == 6 and all(1 <= num <= 45 for num in nums):
-                                numbers.append(nums)
+                            elements = content.split(',')
+                            if len(elements) == 6:
+                                valid_nums = []
+                                for elem in elements:
+                                    elem = elem.strip()
+                                    if is_valid_lotto_number(elem):
+                                        valid_nums.append(int(elem))
+                                
+                                if len(valid_nums) == 6 and validate_number_set(valid_nums):
+                                    numbers.append(valid_nums)
                     except (ValueError, AttributeError):
                         continue
         
         # 4. 콤마로 구분된 숫자 찾기 (7, 13, 25, 28, 32, 42 형식)
         if not numbers:
-            # 6개의 숫자가 콤마로 구분된 패턴 찾기
+            # 6개의 연속된 유효한 숫자 패턴 찾기
             pattern = r'(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)'
             matches = re.findall(pattern, generated_text)
             for match in matches:
                 try:
-                    nums = [int(x) for x in match]
-                    if len(nums) == 6 and all(1 <= num <= 45 for num in nums):
-                        numbers.append(nums)
-                except ValueError:
+                    # 각 매치된 요소가 유효한 로또 번호인지 확인
+                    valid_nums = []
+                    for num_str in match:
+                        if is_valid_lotto_number(num_str):
+                            valid_nums.append(int(num_str))
+                    
+                    if len(valid_nums) == 6 and validate_number_set(valid_nums):
+                        numbers.append(valid_nums)
+                except (ValueError, AttributeError):
                     continue
         
+        # 최종 검증 및 중복 제거
         if numbers:
-            # 중복 제거 및 최대 5세트 반환
             unique_numbers = []
             for num_set in numbers:
-                if num_set not in unique_numbers:
+                if validate_number_set(num_set) and num_set not in unique_numbers:
                     unique_numbers.append(num_set)
-            print(f"추천받은 로또 번호: {unique_numbers[:5]}")
-            return unique_numbers[:5]
-        else:
-            print("ChatGPT 응답에서 올바른 형식의 번호를 찾을 수 없습니다.")
-            return []
+            
+            if len(unique_numbers) >= 5:
+                print(f"추천받은 로또 번호: {unique_numbers[:5]}")
+                return unique_numbers[:5]
+            elif len(unique_numbers) > 0:
+                print(f"일부 유효한 번호 발견: {unique_numbers}")
+                # 부족한 세트는 기본값으로 채움
+                additional_sets = generate_fallback_numbers(5 - len(unique_numbers))
+                unique_numbers.extend(additional_sets)
+                print(f"기본값으로 채워진 최종 번호: {unique_numbers}")
+                return unique_numbers
+        
+        # 모든 파싱 실패 시 기본값 반환
+        print("ChatGPT 응답에서 유효한 번호를 찾을 수 없습니다. 기본값을 반환합니다.")
+        return generate_fallback_numbers()
             
     except Exception as e:
         print(f"ChatGPT API 호출 중 오류 발생: {e}")
-        return []
+        print("기본값을 반환합니다.")
+        return generate_fallback_numbers()
 
 def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
     """수동 번호 입력으로 로또 구매"""
