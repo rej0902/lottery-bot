@@ -438,31 +438,15 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
         elif "authentication" in str(e).lower():
             print("💡 인증 오류로 추정됨")
         
-        print("🔄 자동 번호 구매로 전환합니다.")
-        
-        # 수동 구매 실패 시 자동 구매로 fallback
-        try:
-            response = lotto.buy_lotto645(authCtrl, cnt, lotto645.Lotto645Mode.AUTO)
-            response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
-            
-            # 자동 구매 성공 시 메시지에 표시할 정보 추가
-            if response.get('result', {}).get('resultMsg', '').upper() == 'SUCCESS':
-                response['purchase_method'] = 'AUTO_FALLBACK_AFTER_MANUAL_FAIL'
-                print("✅ 자동 번호 구매 성공")
-            
-            return response
-            
-        except Exception as e2:
-            print(f"❌ 자동 번호 구매도 실패: {e2}")
-            print(f"🔍 자동 구매 오류 상세: {type(e2).__name__}: {str(e2)}")
-            return {
-                "result": {
-                    "resultMsg": f"수동 구매 실패({str(e)}) 후 자동 구매도 실패: {str(e2)}",
-                    "buyRound": "알 수 없음"
-                },
-                "balance": "확인불가",
-                "purchase_method": "FAILED"
-            }
+        # 수동 구매 실패 시 오류 응답 반환 (자동 구매 fallback 제거)
+        return {
+            "result": {
+                "resultMsg": f"ChatGPT 추천 번호로 수동 구매 실패: {str(e)}",
+                "buyRound": "알 수 없음"
+            },
+            "balance": "확인불가",
+            "purchase_method": "CHATGPT_MANUAL_FAILED"
+        }
 
 
 def buy_lotto645(authCtrl: auth.AuthController, cnt: int, mode: str):

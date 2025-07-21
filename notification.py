@@ -29,6 +29,9 @@ class Notification:
             elif purchase_method == "AUTO_FALLBACK_AFTER_MANUAL_FAIL":
                 method_emoji = "🔄"
                 method_text = "수동 구매 실패 → 자동 번호 구매"
+            elif purchase_method == "CHATGPT_MANUAL_FAILED":
+                method_emoji = "🤖"
+                method_text = "ChatGPT 추천 번호로 수동 구매"
             else:
                 method_emoji = "✅"
                 method_text = "로또 구매"
@@ -41,8 +44,8 @@ class Notification:
             error_msg = result.get("resultMsg", "알 수 없는 오류")
             
             # 실패 유형에 따른 메시지 구성
-            if "ChatGPT" in error_msg:
-                failure_type = "🤖 ChatGPT 오류"
+            if "ChatGPT" in error_msg or purchase_method == "CHATGPT_MANUAL_FAILED":
+                failure_type = "🤖 ChatGPT 수동 구매 실패"
             elif "자동 구매" in error_msg:
                 failure_type = "🔄 자동 구매 실패"
             else:
