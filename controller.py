@@ -32,25 +32,49 @@ def get_manual_numbers_from_gpt():
             # 숫자만 포함하는지 확인
             if not re.match(r'^\d+$', num_str.strip()):
                 return False
+            
+            # *** 같은 잘못된 문자가 포함되어 있는지 확인
+            if '*' in num_str or '***' in num_str:
+                return False
+            
             num = int(num_str.strip())
-            return 1 <= num <= 45
+            
+            # 1-45 범위 확인
+            if num < 1 or num > 45:
+                return False
+            
+            # 숫자 길이 확인 (1-45는 1-2자리)
+            if len(str(num)) > 2:
+                return False
+                
+            return True
         except (ValueError, AttributeError):
             return False
     
     def validate_number_set(nums):
-        """번호 세트가 유효한지 검증"""
+        """번호 세트가 유효한지 검증 (더 엄격한 검증)"""
         if not isinstance(nums, list) or len(nums) != 6:
             return False
         
         # 모든 번호가 1-45 범위이고 중복이 없는지 확인
-        if not all(isinstance(num, int) and 1 <= num <= 45 for num in nums):
-            return False
-        
-        # 중복 확인
-        if len(set(nums)) != 6:
-            return False
+        try:
+            for num in nums:
+                # 숫자가 정수이고 1-45 범위인지 확인
+                if not isinstance(num, int) or num < 1 or num > 45:
+                    return False
+                
+                # 숫자를 문자열로 변환해서 *** 같은 잘못된 문자가 포함되어 있는지 확인
+                num_str = str(num)
+                if '*' in num_str or '***' in num_str or len(num_str) > 2:
+                    return False
             
-        return True
+            # 중복 확인
+            if len(set(nums)) != 6:
+                return False
+                
+            return True
+        except (ValueError, TypeError):
+            return False
     
     def generate_fallback_numbers(count=5):
         """ChatGPT 실패 시 기본 번호 생성"""
@@ -69,7 +93,7 @@ def get_manual_numbers_from_gpt():
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a professional lottery number recommendation expert. You must only respond with valid lottery numbers between 1-45. Do not include any symbols like '*' or invalid characters. Always return exactly 5 sets of 6 numbers each in the specified format."},
+                    {"role": "system", "content": "You are a professional lottery number recommendation expert. You must ONLY respond with valid lottery numbers between 1-45. NEVER include any symbols like '*', '***', or any other invalid characters. NEVER use placeholders or incomplete numbers. Always return exactly 5 sets of 6 numbers each in the specified format. Each number must be a complete integer between 1 and 45."},
                     {"role": "user", "content": prompt_text}
                 ]
             )
@@ -99,7 +123,28 @@ def get_manual_numbers_from_gpt():
                                 return numbers
                     except (json.JSONDecodeError, ValueError, TypeError) as e:
                         print(f"JSON 파싱 실패 (시도 1): {e}")
-                        continue
+                        # JSON 파싱 실패 시 텍스트 정리 후 재시도
+                        try:
+                            # *** 같은 잘못된 문자 제거
+                            cleaned_match = re.sub(r'\*+', '', match)
+                            # 빈 대괄호나 잘못된 형식 정리
+                            cleaned_match = re.sub(r'\[,\s*\]', '[]', cleaned_match)
+                            cleaned_match = re.sub(r'\[\s*,', '[', cleaned_match)
+                            cleaned_match = re.sub(r',\s*\]', ']', cleaned_match)
+                            
+                            if cleaned_match != match:
+                                print(f"텍스트 정리 후 재시도: {cleaned_match}")
+                                parsed_numbers = json.loads(cleaned_match)
+                                if isinstance(parsed_numbers, list):
+                                    for num_set in parsed_numbers:
+                                        if validate_number_set(num_set):
+                                            numbers.append(num_set)
+                                    if numbers:
+                                        print(f"정리된 JSON으로 파싱 성공: {numbers}")
+                                        return numbers
+                        except (json.JSONDecodeError, ValueError, TypeError) as e2:
+                            print(f"정리된 JSON 파싱도 실패: {e2}")
+                            continue
             except Exception as e:
                 print(f"JSON 패턴 검색 실패: {e}")
             
