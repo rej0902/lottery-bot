@@ -15,6 +15,17 @@ import time
 def get_manual_numbers_from_gpt():
     """ChatGPT API를 사용하여 로또 번호 추천 받기"""
     
+    # API 키 디버깅
+    api_key = os.environ.get('OPEN_API_KEY')
+    if not api_key:
+        print("❌ OPEN_API_KEY 환경변수가 설정되지 않았습니다.")
+        return []
+    elif len(api_key) < 20:
+        print(f"❌ OPEN_API_KEY가 너무 짧습니다: {len(api_key)}자")
+        return []
+    else:
+        print(f"✅ OPEN_API_KEY 확인됨: {api_key[:10]}...{api_key[-4:]}")
+    
     def is_valid_lotto_number(num_str):
         """유효한 로또 번호인지 엄격하게 검증"""
         try:
@@ -185,6 +196,23 @@ def get_manual_numbers_from_gpt():
             
         except Exception as e:
             print(f"ChatGPT API 호출 중 오류 발생 ({attempt_type}): {e}")
+            
+            # API 키 관련 오류 상세 분석
+            error_str = str(e).lower()
+            if "invalid_api_key" in error_str or "401" in error_str:
+                print("🔑 API 키 인증 오류 - GitHub Secrets에서 OPEN_API_KEY 확인 필요")
+                print("💡 GitHub 저장소 > Settings > Secrets and variables > Actions에서 확인")
+            elif "quota" in error_str or "billing" in error_str:
+                print("💰 API 할당량 초과 또는 결제 문제")
+            elif "rate_limit" in error_str:
+                print("⏱️ API 호출 제한 초과")
+            elif "timeout" in error_str:
+                print("⏰ API 호출 타임아웃")
+            elif "connection" in error_str:
+                print("🌐 네트워크 연결 오류")
+            else:
+                print(f"❓ 기타 오류: {type(e).__name__}")
+            
             return []
     
     # 로또 통계 데이터 가져오기
