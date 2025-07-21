@@ -66,81 +66,122 @@ def get_manual_numbers_from_gpt():
             generated_text = response.choices[0].message.content
             print(f"ChatGPT 응답 ({attempt_type}): {generated_text}")
             
-            # 파싱 로직 (기존과 동일)
+            # 파싱 로직 강화
             numbers = []
             
-            # 1. 표준 JSON 형식 시도
-            match = re.search(r'\[\s*\[.*?\]\s*\]', generated_text, re.DOTALL)
-            if match:
-                try:
-                    list_str = match.group()
-                    parsed_numbers = json.loads(list_str)
-                    for num_set in parsed_numbers:
-                        if validate_number_set(num_set):
-                            numbers.append(num_set)
-                    if numbers:
-                        print(f"JSON 형식으로 파싱 성공: {numbers}")
-                        return numbers
-                except json.JSONDecodeError:
-                    print("JSON 파싱 실패")
-            
-            # 2. 대괄호 형식 찾기
-            if not numbers:
-                bracket_matches = re.findall(r'\[([^\]]+)\]', generated_text)
-                for match in bracket_matches:
+            # 1. 표준 JSON 형식 시도 (더 안전한 방식)
+            try:
+                # 전체 텍스트에서 JSON 배열 패턴 찾기
+                json_pattern = r'\[\s*\[.*?\]\s*\]'
+                matches = re.findall(json_pattern, generated_text, re.DOTALL)
+                
+                for match in matches:
                     try:
-                        elements = match.split(',')
-                        if len(elements) == 6:
+                        # JSON 파싱 시도
+                        parsed_numbers = json.loads(match)
+                        if isinstance(parsed_numbers, list):
+                            for num_set in parsed_numbers:
+                                if validate_number_set(num_set):
+                                    numbers.append(num_set)
+                            if numbers:
+                                print(f"JSON 형식으로 파싱 성공: {numbers}")
+                                return numbers
+                    except (json.JSONDecodeError, ValueError, TypeError) as e:
+                        print(f"JSON 파싱 실패 (시도 1): {e}")
+                        continue
+            except Exception as e:
+                print(f"JSON 패턴 검색 실패: {e}")
+            
+            # 2. 개별 대괄호 세트 찾기 (더 유연한 방식)
+            if not numbers:
+                try:
+                    # 모든 대괄호 쌍 찾기
+                    bracket_pattern = r'\[([^\]]+)\]'
+                    bracket_matches = re.findall(bracket_pattern, generated_text)
+                    
+                    for match in bracket_matches:
+                        try:
+                            # 콤마로 분리하고 공백 제거
+                            elements = [elem.strip() for elem in match.split(',')]
+                            if len(elements) == 6:
+                                valid_nums = []
+                                for elem in elements:
+                                    if is_valid_lotto_number(elem):
+                                        valid_nums.append(int(elem))
+                                
+                                if len(valid_nums) == 6 and validate_number_set(valid_nums):
+                                    numbers.append(valid_nums)
+                        except (ValueError, AttributeError) as e:
+                            print(f"대괄호 파싱 실패: {e}")
+                            continue
+                except Exception as e:
+                    print(f"대괄호 패턴 검색 실패: {e}")
+            
+            # 3. 줄별 분석 (더 세밀한 방식)
+            if not numbers:
+                try:
+                    lines = generated_text.split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if '[' in line and ']' in line:
+                            try:
+                                # 각 줄에서 대괄호 내용 추출
+                                bracket_content = re.search(r'\[([^\]]+)\]', line)
+                                if bracket_content:
+                                    content = bracket_content.group(1)
+                                    elements = [elem.strip() for elem in content.split(',')]
+                                    if len(elements) == 6:
+                                        valid_nums = []
+                                        for elem in elements:
+                                            if is_valid_lotto_number(elem):
+                                                valid_nums.append(int(elem))
+                                        
+                                        if len(valid_nums) == 6 and validate_number_set(valid_nums):
+                                            numbers.append(valid_nums)
+                            except (ValueError, AttributeError) as e:
+                                print(f"줄별 파싱 실패: {e}")
+                                continue
+                except Exception as e:
+                    print(f"줄별 분석 실패: {e}")
+            
+            # 4. 연속된 숫자 패턴 찾기 (최후의 수단)
+            if not numbers:
+                try:
+                    # 6개의 연속된 숫자 패턴 찾기
+                    number_pattern = r'(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)'
+                    matches = re.findall(number_pattern, generated_text)
+                    
+                    for match in matches:
+                        try:
                             valid_nums = []
-                            for elem in elements:
-                                elem = elem.strip()
-                                if is_valid_lotto_number(elem):
-                                    valid_nums.append(int(elem))
+                            for num_str in match:
+                                if is_valid_lotto_number(num_str):
+                                    valid_nums.append(int(num_str))
                             
                             if len(valid_nums) == 6 and validate_number_set(valid_nums):
                                 numbers.append(valid_nums)
-                    except (ValueError, AttributeError):
-                        continue
-            
-            # 3. 일반 텍스트에서 번호 추출
-            if not numbers:
-                lines = generated_text.split('\n')
-                for line in lines:
-                    if '[' in line and ']' in line:
-                        try:
-                            bracket_content = re.search(r'\[([^\]]+)\]', line)
-                            if bracket_content:
-                                content = bracket_content.group(1)
-                                elements = content.split(',')
-                                if len(elements) == 6:
-                                    valid_nums = []
-                                    for elem in elements:
-                                        elem = elem.strip()
-                                        if is_valid_lotto_number(elem):
-                                            valid_nums.append(int(elem))
-                                    
-                                    if len(valid_nums) == 6 and validate_number_set(valid_nums):
-                                        numbers.append(valid_nums)
-                        except (ValueError, AttributeError):
+                        except (ValueError, AttributeError) as e:
+                            print(f"숫자 패턴 파싱 실패: {e}")
                             continue
+                except Exception as e:
+                    print(f"숫자 패턴 검색 실패: {e}")
             
-            # 4. 콤마로 구분된 숫자 찾기
-            if not numbers:
-                pattern = r'(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)'
-                matches = re.findall(pattern, generated_text)
-                for match in matches:
-                    try:
-                        valid_nums = []
-                        for num_str in match:
-                            if is_valid_lotto_number(num_str):
-                                valid_nums.append(int(num_str))
-                        
-                        if len(valid_nums) == 6 and validate_number_set(valid_nums):
-                            numbers.append(valid_nums)
-                    except (ValueError, AttributeError):
-                        continue
+            # 5. 최종 검증 및 중복 제거
+            if numbers:
+                unique_numbers = []
+                for num_set in numbers:
+                    if validate_number_set(num_set) and num_set not in unique_numbers:
+                        unique_numbers.append(num_set)
+                
+                if len(unique_numbers) >= 5:
+                    print(f"✅ 최종 파싱 성공: {len(unique_numbers)}개 세트")
+                    return unique_numbers[:5]
+                elif len(unique_numbers) > 0:
+                    print(f"⚠️ 일부 유효한 번호 발견: {len(unique_numbers)}개 세트")
+                    return unique_numbers
             
-            return numbers
+            print(f"❌ 모든 파싱 방법 실패 - 유효한 번호를 찾을 수 없음")
+            return []
             
         except Exception as e:
             print(f"ChatGPT API 호출 중 오류 발생 ({attempt_type}): {e}")
@@ -298,6 +339,8 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
     # ChatGPT 번호로 수동 구매 시도
     try:
         print(f"🤖 ChatGPT 추천 번호로 수동 구매 시도: {len(manual_numbers)}개 세트")
+        print(f"📋 추천 번호 상세: {manual_numbers}")
+        
         response = lotto.buy_lotto645(authCtrl, cnt, lotto645.Lotto645Mode.MANUAL, manual_numbers)
         response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
         
@@ -310,6 +353,18 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
         
     except Exception as e:
         print(f"⚠️ ChatGPT 추천 번호로 수동 구매 실패: {e}")
+        print(f"🔍 오류 상세 정보: {type(e).__name__}: {str(e)}")
+        
+        # 오류 타입별 상세 정보 출력
+        if "Expecting value" in str(e):
+            print("💡 JSON 파싱 오류로 추정됨 - ChatGPT 응답 형식 문제")
+        elif "connection" in str(e).lower():
+            print("💡 네트워크 연결 오류로 추정됨")
+        elif "timeout" in str(e).lower():
+            print("💡 타임아웃 오류로 추정됨")
+        elif "authentication" in str(e).lower():
+            print("💡 인증 오류로 추정됨")
+        
         print("🔄 자동 번호 구매로 전환합니다.")
         
         # 수동 구매 실패 시 자동 구매로 fallback
@@ -326,6 +381,7 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
             
         except Exception as e2:
             print(f"❌ 자동 번호 구매도 실패: {e2}")
+            print(f"🔍 자동 구매 오류 상세: {type(e2).__name__}: {str(e2)}")
             return {
                 "result": {
                     "resultMsg": f"수동 구매 실패({str(e)}) 후 자동 구매도 실패: {str(e2)}",
