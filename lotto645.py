@@ -163,7 +163,14 @@ class Lotto645:
             data=data,
         )
         res.encoding = "utf-8"
-        return json.loads(res.text)
+        
+        # 안전한 JSON 파싱 적용
+        response_data = safe_json_parse(res.text, {})
+        if not response_data:
+            print(f"❌ 구매 API 응답 파싱 실패: {res.text}")
+            return {"error": "JSON 파싱 실패", "raw_response": res.text}
+        
+        return response_data
 
     def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController

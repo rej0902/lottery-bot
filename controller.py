@@ -99,7 +99,20 @@ def get_manual_numbers_from_gpt():
             )
 
             generated_text = response.choices[0].message.content
-            print(f"ChatGPT 응답 ({attempt_type}): {generated_text}")
+            print(f"🤖 ChatGPT 응답 ({attempt_type}):")
+            print(f"   📝 원본 응답: {repr(generated_text)}")
+            print(f"   📊 응답 길이: {len(generated_text)}자")
+            print(f"   🔍 응답 내용: {generated_text}")
+            
+            # 응답 유효성 검사 추가
+            if not generated_text or not generated_text.strip():
+                print(f"❌ ChatGPT 응답이 비어있습니다 ({attempt_type})")
+                return []
+            
+            # 응답 길이 검사
+            if len(generated_text.strip()) < 10:
+                print(f"❌ ChatGPT 응답이 너무 짧습니다: {len(generated_text)}자 ({attempt_type})")
+                return []
             
             # 파싱 로직 강화
             numbers = []
@@ -111,18 +124,24 @@ def get_manual_numbers_from_gpt():
                 matches = re.findall(json_pattern, generated_text, re.DOTALL)
                 
                 for match in matches:
+                    print(f"   🔧 JSON 패턴 발견: {repr(match)}")
                     try:
                         # JSON 파싱 시도
                         parsed_numbers = json.loads(match)
+                        print(f"   ✅ JSON 파싱 성공: {parsed_numbers}")
                         if isinstance(parsed_numbers, list):
                             for num_set in parsed_numbers:
                                 if validate_number_set(num_set):
                                     numbers.append(num_set)
                             if numbers:
-                                print(f"JSON 형식으로 파싱 성공: {numbers}")
+                                print(f"   🎯 최종 유효 번호: {numbers}")
                                 return numbers
+                        else:
+                            print(f"   ❌ 파싱된 데이터가 리스트가 아님: {type(parsed_numbers)}")
                     except (json.JSONDecodeError, ValueError, TypeError) as e:
-                        print(f"JSON 파싱 실패 (시도 1): {e}")
+                        print(f"   ❌ JSON 파싱 실패 (시도 1): {e}")
+                        print(f"   🔍 문제가 된 텍스트: {repr(match)}")
+                        
                         # JSON 파싱 실패 시 텍스트 정리 후 재시도
                         try:
                             # *** 같은 잘못된 문자 제거
@@ -131,19 +150,24 @@ def get_manual_numbers_from_gpt():
                             cleaned_match = re.sub(r'\[,\s*\]', '[]', cleaned_match)
                             cleaned_match = re.sub(r'\[\s*,', '[', cleaned_match)
                             cleaned_match = re.sub(r',\s*\]', ']', cleaned_match)
+                            # 여러 공백을 하나로 정리
+                            cleaned_match = re.sub(r'\s+', ' ', cleaned_match)
+                            # 앞뒤 공백 제거
+                            cleaned_match = cleaned_match.strip()
                             
-                            if cleaned_match != match:
-                                print(f"텍스트 정리 후 재시도: {cleaned_match}")
+                            if cleaned_match != match and cleaned_match:
+                                print(f"   🔧 텍스트 정리 후 재시도: {repr(cleaned_match)}")
                                 parsed_numbers = json.loads(cleaned_match)
                                 if isinstance(parsed_numbers, list):
                                     for num_set in parsed_numbers:
                                         if validate_number_set(num_set):
                                             numbers.append(num_set)
                                     if numbers:
-                                        print(f"정리된 JSON으로 파싱 성공: {numbers}")
+                                        print(f"   🎯 정리된 JSON으로 파싱 성공: {numbers}")
                                         return numbers
                         except (json.JSONDecodeError, ValueError, TypeError) as e2:
-                            print(f"정리된 JSON 파싱도 실패: {e2}")
+                            print(f"   ❌ 정리된 JSON 파싱도 실패: {e2}")
+                            print(f"   🔍 정리된 텍스트: {repr(cleaned_match)}")
                             continue
             except Exception as e:
                 print(f"JSON 패턴 검색 실패: {e}")
@@ -236,7 +260,12 @@ def get_manual_numbers_from_gpt():
                     print(f"⚠️ 일부 유효한 번호 발견: {len(unique_numbers)}개 세트")
                     return unique_numbers
             
-            print(f"❌ 모든 파싱 방법 실패 - 유효한 번호를 찾을 수 없음")
+            print(f"   ❌ 모든 파싱 방법 실패 - 유효한 번호를 찾을 수 없음")
+            print(f"   📝 원본 응답: {repr(generated_text)}")
+            print(f"   🔍 응답 분석:")
+            print(f"      - JSON 패턴 검색: {'실패' if not matches else f'{len(matches)}개 발견'}")
+            print(f"      - 대괄호 패턴 검색: {'실패' if not bracket_matches else f'{len(bracket_matches)}개 발견'}")
+            print(f"      - 줄별 분석: {'실패' if not lines else f'{len(lines)}줄 분석'}")
             return []
             
         except Exception as e:
@@ -415,6 +444,7 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
     try:
         print(f"🤖 ChatGPT 추천 번호로 수동 구매 시도: {len(manual_numbers)}개 세트")
         print(f"📋 추천 번호 상세: {manual_numbers}")
+        print(f"🔍 ChatGPT 응답 분석 완료 - 구매 API 호출 시작")
         
         response = lotto.buy_lotto645(authCtrl, cnt, lotto645.Lotto645Mode.MANUAL, manual_numbers)
         response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
@@ -432,7 +462,8 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
         
         # 오류 타입별 상세 정보 출력
         if "Expecting value" in str(e):
-            print("💡 JSON 파싱 오류로 추정됨 - ChatGPT 응답 형식 문제")
+            print("💡 JSON 파싱 오류로 추정됨 - 동행복권 API 응답 형식 문제")
+            print("💡 이는 ChatGPT 응답이 아닌 동행복권 서버 응답의 JSON 파싱 오류입니다")
         elif "connection" in str(e).lower():
             print("💡 네트워크 연결 오류로 추정됨")
         elif "timeout" in str(e).lower():
@@ -527,10 +558,33 @@ def buy():
     response = buy_lotto645_manual(globalAuthCtrl, count)
     send_message(1, 0, response=response, webhook_url=slack_webhook_url)
 
-    time.sleep(10)
+    # 로또 구매 성공 여부 확인
+    lotto_success = False
+    result_msg = response.get('result', {}).get('resultMsg', '')
+    
+    if result_msg.upper() == 'SUCCESS':
+        lotto_success = True
+        print("✅ 로또 구매 성공 - 연금복권 구매 진행")
+    else:
+        print("❌ 로또 구매 실패 - 연금복권 구매 중단")
+        print(f"실패 사유: {result_msg}")
+        
+        # 구매 방법도 확인
+        purchase_method = response.get('purchase_method', 'UNKNOWN')
+        if purchase_method == 'CHATGPT_MANUAL_FAILED':
+            print("💡 ChatGPT 추천 번호로 수동 구매 실패")
+        elif purchase_method == 'AUTO_FALLBACK':
+            print("💡 자동 구매로 fallback됨")
+        elif purchase_method == 'FAILED':
+            print("💡 모든 구매 방법 실패")
 
-    response = buy_win720(globalAuthCtrl, username) 
-    send_message(1, 1, response=response, webhook_url=slack_webhook_url)
+    # 로또 구매 성공 시에만 연금복권 구매 진행
+    if lotto_success:
+        time.sleep(10)
+        response = buy_win720(globalAuthCtrl, username) 
+        send_message(1, 1, response=response, webhook_url=slack_webhook_url)
+    else:
+        print("🛑 연금복권 구매를 건너뜁니다 (로또 구매 실패로 인해)")
 
 def run():
     if len(sys.argv) < 2:
