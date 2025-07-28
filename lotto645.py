@@ -186,11 +186,37 @@ class Lotto645:
         )
         res.encoding = "utf-8"
         
+        # 응답이 HTML 오류 페이지인지 확인
+        if res.text.strip().startswith('<!DOCTYPE html') or '<html>' in res.text.lower():
+            print(f"❌ 동행복권 서버 오류 - HTML 오류 페이지 반환")
+            print(f"🔍 오류 내용: {res.text[:500]}...")
+            
+            # HTML에서 오류 메시지 추출 시도
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(res.text, 'html.parser')
+                error_text = soup.find('td', class_='lt_text2')
+                if error_text:
+                    error_msg = error_text.get_text(strip=True)
+                    print(f"💡 서버 오류 메시지: {error_msg}")
+                    return {
+                        "error": "서버 오류",
+                        "server_error": error_msg,
+                        "raw_response": res.text[:1000]  # 처음 1000자만 저장
+                    }
+            except:
+                pass
+            
+            return {
+                "error": "서버 오류 - HTML 응답",
+                "raw_response": res.text[:1000]
+            }
+        
         # 안전한 JSON 파싱 적용
         response_data = safe_json_parse(res.text, {})
         if not response_data:
-            print(f"❌ 구매 API 응답 파싱 실패: {res.text}")
-            return {"error": "JSON 파싱 실패", "raw_response": res.text}
+            print(f"❌ 구매 API 응답 파싱 실패: {res.text[:500]}...")
+            return {"error": "JSON 파싱 실패", "raw_response": res.text[:1000]}
         
         return response_data
 
@@ -305,7 +331,9 @@ class Lotto645:
             "nBuyAmount": str(1000 * cnt),
             "param": json.dumps(
                 [
-                    {"genType": "1", "arrGameChoiceNum": numbers, "alpabet": slot}
+                    # 동행복권 API는 arrGameChoiceNum을 콤마 구분자 문자열로 요구
+                    # 예: [5, 12, 17, 27, 33, 43] -> "5,12,17,27,33,43"
+                    {"genType": "1", "arrGameChoiceNum": ",".join(map(str, numbers)), "alpabet": slot}
                     for slot, numbers in zip(SLOTS[:cnt], manual_numbers)
                 ]
             ),

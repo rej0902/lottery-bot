@@ -470,6 +470,9 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
             print("💡 타임아웃 오류로 추정됨")
         elif "authentication" in str(e).lower():
             print("💡 인증 오류로 추정됨")
+        elif "서버 오류" in str(e):
+            print("💡 동행복권 서버 측 오류로 추정됨")
+            print("💡 잠시 후 다시 시도하거나 동행복권 사이트를 직접 확인해보세요")
         
         # 수동 구매 실패 시 오류 응답 반환 (자동 구매 fallback 제거)
         return {
