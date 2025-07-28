@@ -2,6 +2,7 @@ import json
 import datetime
 import base64
 import requests
+import re
 
 from enum import Enum
 from bs4 import BeautifulSoup as BS
@@ -14,6 +15,27 @@ from Crypto.Random import get_random_bytes
 from HttpClient import HttpClientSingleton
 
 import auth
+
+
+def safe_json_parse(text, fallback=None):
+    """
+    안전한 JSON 파싱 함수
+    - 빈 문자열, None, 잘못된 형식 등을 처리
+    - 파싱 실패 시 fallback 값 반환
+    """
+    if not text or not isinstance(text, str):
+        return fallback
+    
+    text = text.strip()
+    if not text:
+        return fallback
+    
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError, TypeError) as e:
+        print(f"JSON 파싱 실패: {e}")
+        print(f"문제 텍스트: {repr(text)}")
+        return fallback
 
 class Win720:
 
@@ -60,11 +82,27 @@ class Win720:
         win720_round = self._get_round()
         
         makeAutoNum_ret = self._makeAutoNumbers(auth_ctrl, win720_round)
-        parsed_ret = self._decText(json.loads(makeAutoNum_ret)['q']) 
-        extracted_num = json.loads(parsed_ret)["selLotNo"]
+        
+        # 안전한 JSON 파싱
+        auto_num_data = safe_json_parse(makeAutoNum_ret, {})
+        if not auto_num_data or 'q' not in auto_num_data:
+            print(f"❌ makeAutoNumbers 응답 파싱 실패: {makeAutoNum_ret}")
+            return {"error": "makeAutoNumbers 파싱 실패"}
+        
+        parsed_ret = self._decText(auto_num_data['q'])
+        extracted_data = safe_json_parse(parsed_ret, {})
+        if not extracted_data or 'selLotNo' not in extracted_data:
+            print(f"❌ selLotNo 파싱 실패: {parsed_ret}")
+            return {"error": "selLotNo 파싱 실패"}
+        
+        extracted_num = extracted_data["selLotNo"]
         orderNo, orderDate = self._doOrderRequest(auth_ctrl, win720_round, extracted_num)
         
-        body = json.loads(self._doConnPro(auth_ctrl, win720_round, extracted_num, username, orderNo, orderDate))
+        conn_pro_result = self._doConnPro(auth_ctrl, win720_round, extracted_num, username, orderNo, orderDate)
+        body = safe_json_parse(conn_pro_result, {})
+        if not body:
+            print(f"❌ connPro 응답 파싱 실패: {conn_pro_result}")
+            return {"error": "connPro 파싱 실패"}
 
         self._show_result(body)
         return body
@@ -112,7 +150,16 @@ class Win720:
             data=data
         )
 
-        ret = json.loads(self._decText(json.loads(res.text)['q']))
+        response_data = safe_json_parse(res.text, {})
+        if not response_data or 'q' not in response_data:
+            print(f"❌ doOrderRequest 응답 파싱 실패: {res.text}")
+            return None, None
+        
+        decrypted_text = self._decText(response_data['q'])
+        ret = safe_json_parse(decrypted_text, {})
+        if not ret:
+            print(f"❌ doOrderRequest 복호화 파싱 실패: {decrypted_text}")
+            return None, None
 
         return ret['orderNo'], ret['orderDate']
 
@@ -130,7 +177,12 @@ class Win720:
             data=data
         )
 
-        ret = self._decText(json.loads(res.text)['q'])
+        response_data = safe_json_parse(res.text, {})
+        if not response_data or 'q' not in response_data:
+            print(f"❌ doConnPro 응답 파싱 실패: {res.text}")
+            return "{}"
+        
+        ret = self._decText(response_data['q'])
         
         return ret
 

@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 
 from datetime import timedelta
 from enum import Enum
@@ -8,6 +9,27 @@ from bs4 import BeautifulSoup as BS
 
 import auth
 from HttpClient import HttpClientSingleton
+
+
+def safe_json_parse(text, fallback=None):
+    """
+    안전한 JSON 파싱 함수
+    - 빈 문자열, None, 잘못된 형식 등을 처리
+    - 파싱 실패 시 fallback 값 반환
+    """
+    if not text or not isinstance(text, str):
+        return fallback
+    
+    text = text.strip()
+    if not text:
+        return fallback
+    
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError, TypeError) as e:
+        print(f"JSON 파싱 실패: {e}")
+        print(f"문제 텍스트: {repr(text)}")
+        return fallback
 
 class Lotto645Mode(Enum):
     AUTO = 1
