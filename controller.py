@@ -440,6 +440,37 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
                 "purchase_method": "FAILED"
             }
 
+    # cnt와 manual_numbers 길이 맞추기
+    if len(manual_numbers) > cnt:
+        print(f"📝 ChatGPT가 {len(manual_numbers)}개 세트를 추천했지만 {cnt}개만 구매합니다.")
+        manual_numbers = manual_numbers[:cnt]
+    elif len(manual_numbers) < cnt:
+        print(f"⚠️ ChatGPT가 {len(manual_numbers)}개 세트만 추천했지만 {cnt}개가 필요합니다.")
+        print("🔄 자동 번호 구매로 전환합니다.")
+        
+        # 자동 번호 구매로 fallback
+        try:
+            response = lotto.buy_lotto645(authCtrl, cnt, lotto645.Lotto645Mode.AUTO)
+            response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
+            
+            # 자동 구매 성공 시 메시지에 표시할 정보 추가
+            if response.get('result', {}).get('resultMsg', '').upper() == 'SUCCESS':
+                response['purchase_method'] = 'AUTO_FALLBACK'
+                print("✅ 자동 번호 구매 성공")
+            
+            return response
+            
+        except Exception as e:
+            print(f"❌ 자동 번호 구매도 실패: {e}")
+            return {
+                "result": {
+                    "resultMsg": f"ChatGPT 부족 후 자동 구매도 실패: {str(e)}",
+                    "buyRound": "알 수 없음"
+                },
+                "balance": "확인불가",
+                "purchase_method": "FAILED"
+            }
+
     # ChatGPT 번호로 수동 구매 시도
     try:
         print(f"🤖 ChatGPT 추천 번호로 수동 구매 시도: {len(manual_numbers)}개 세트")
