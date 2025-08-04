@@ -144,8 +144,26 @@ class Lotto645:
         soup = BS(
             html, "html5lib"
         )
-        draw_date = soup.find("input", id="ROUND_DRAW_DATE").get('value')
-        tlmt_date = soup.find("input", id="WAMT_PAY_TLMT_END_DT").get('value')
+        # 안전한 요소 찾기 및 값 추출
+        draw_date_elem = soup.find("input", id="ROUND_DRAW_DATE")
+        tlmt_date_elem = soup.find("input", id="WAMT_PAY_TLMT_END_DT")
+        
+        if draw_date_elem is None:
+            print("❌ ROUND_DRAW_DATE 요소를 찾을 수 없습니다.")
+            print(f"🔍 페이지 내용 일부: {html[:500]}...")
+            raise ValueError("ROUND_DRAW_DATE 요소를 찾을 수 없습니다. 로그인 상태나 페이지 구조를 확인해주세요.")
+        
+        if tlmt_date_elem is None:
+            print("❌ WAMT_PAY_TLMT_END_DT 요소를 찾을 수 없습니다.")
+            print(f"🔍 페이지 내용 일부: {html[:500]}...")
+            raise ValueError("WAMT_PAY_TLMT_END_DT 요소를 찾을 수 없습니다. 로그인 상태나 페이지 구조를 확인해주세요.")
+        
+        draw_date = draw_date_elem.get('value')
+        tlmt_date = tlmt_date_elem.get('value')
+        
+        if not draw_date or not tlmt_date:
+            print(f"❌ 날짜 값이 비어있습니다. draw_date: {draw_date}, tlmt_date: {tlmt_date}")
+            raise ValueError("날짜 값을 가져올 수 없습니다.")
 
         return [direct, draw_date, tlmt_date]
 
