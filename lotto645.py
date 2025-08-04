@@ -177,48 +177,58 @@ class Lotto645:
         assert type(headers) == dict
         assert type(data) == dict
 
-        headers["Content-Type"]  = "application/x-www-form-urlencoded; charset=UTF-8"
+        try:
+            headers["Content-Type"]  = "application/x-www-form-urlencoded; charset=UTF-8"
 
-        res = self.http_client.post(
-            "https://ol.dhlottery.co.kr/olotto/game/execBuy.do",
-            headers=headers,
-            data=data,
-        )
-        res.encoding = "utf-8"
-        
-        # 응답이 HTML 오류 페이지인지 확인
-        if res.text.strip().startswith('<!DOCTYPE html') or '<html>' in res.text.lower():
-            print(f"❌ 동행복권 서버 오류 - HTML 오류 페이지 반환")
-            print(f"🔍 오류 내용: {res.text[:500]}...")
+            res = self.http_client.post(
+                "https://ol.dhlottery.co.kr/olotto/game/execBuy.do",
+                headers=headers,
+                data=data,
+            )
+            res.encoding = "utf-8"
             
-            # HTML에서 오류 메시지 추출 시도
-            try:
-                from bs4 import BeautifulSoup
-                soup = BeautifulSoup(res.text, 'html.parser')
-                error_text = soup.find('td', class_='lt_text2')
-                if error_text:
-                    error_msg = error_text.get_text(strip=True)
-                    print(f"💡 서버 오류 메시지: {error_msg}")
-                    return {
-                        "error": "서버 오류",
-                        "server_error": error_msg,
-                        "raw_response": res.text[:1000]  # 처음 1000자만 저장
-                    }
-            except:
-                pass
+            # 응답이 HTML 오류 페이지인지 확인
+            if res.text.strip().startswith('<!DOCTYPE html') or '<html>' in res.text.lower():
+                print(f"❌ 동행복권 서버 오류 - HTML 오류 페이지 반환")
+                print(f"🔍 오류 내용: {res.text[:500]}...")
+                
+                # HTML에서 오류 메시지 추출 시도
+                try:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(res.text, 'html.parser')
+                    error_text = soup.find('td', class_='lt_text2')
+                    if error_text:
+                        error_msg = error_text.get_text(strip=True)
+                        print(f"💡 서버 오류 메시지: {error_msg}")
+                        return {
+                            "error": "서버 오류",
+                            "server_error": error_msg,
+                            "raw_response": res.text[:1000]  # 처음 1000자만 저장
+                        }
+                except:
+                    pass
+                
+                return {
+                    "error": "서버 오류 - HTML 응답",
+                    "raw_response": res.text[:1000]
+                }
             
+            # 안전한 JSON 파싱 적용
+            response_data = safe_json_parse(res.text, {})
+            if not response_data:
+                print(f"❌ 구매 API 응답 파싱 실패: {res.text[:500]}...")
+                return {"error": "JSON 파싱 실패", "raw_response": res.text[:1000]}
+            
+            return response_data
+            
+        except Exception as e:
+            print(f"❌ 구매 요청 중 예외 발생: {e}")
+            print(f"🔍 예외 타입: {type(e).__name__}")
             return {
-                "error": "서버 오류 - HTML 응답",
-                "raw_response": res.text[:1000]
+                "error": "구매 요청 예외",
+                "exception": str(e),
+                "exception_type": type(e).__name__
             }
-        
-        # 안전한 JSON 파싱 적용
-        response_data = safe_json_parse(res.text, {})
-        if not response_data:
-            print(f"❌ 구매 API 응답 파싱 실패: {res.text[:500]}...")
-            return {"error": "JSON 파싱 실패", "raw_response": res.text[:1000]}
-        
-        return response_data
 
     def check_winning(self, auth_ctrl: auth.AuthController) -> dict:
         assert type(auth_ctrl) == auth.AuthController

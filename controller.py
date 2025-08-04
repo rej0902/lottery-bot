@@ -478,6 +478,19 @@ def buy_lotto645_manual(authCtrl: auth.AuthController, cnt: int):
         print(f"🔍 ChatGPT 응답 분석 완료 - 구매 API 호출 시작")
         
         response = lotto.buy_lotto645(authCtrl, cnt, lotto645.Lotto645Mode.MANUAL, manual_numbers)
+        
+        # response가 None인 경우 처리
+        if response is None:
+            print("❌ 로또 구매 API가 None을 반환했습니다")
+            return {
+                "result": {
+                    "resultMsg": "로또 구매 API 응답 없음",
+                    "buyRound": "알 수 없음"
+                },
+                "balance": "확인불가",
+                "purchase_method": "CHATGPT_MANUAL_FAILED"
+            }
+        
         response['balance'] = lotto.get_balance(auth_ctrl=authCtrl)
         
         # 수동 구매 성공 시 메시지에 표시할 정보 추가
@@ -594,6 +607,13 @@ def buy():
 
     # 로또 구매 성공 여부 확인
     lotto_success = False
+    
+    # response가 None인 경우 처리
+    if response is None:
+        print("❌ 로또 구매 실패 - 응답이 None입니다")
+        print("🛑 연금복권 구매를 건너뜁니다")
+        return
+    
     result_msg = response.get('result', {}).get('resultMsg', '')
     
     if result_msg.upper() == 'SUCCESS':
